@@ -2,6 +2,12 @@
 
 A client-side web tool for tier-one automotive supplier commercial teams. Upload an Excel workbook to visualize how **average price**, **volume**, and **cost components** evolve from **At Time of Quote** through annual years — with **2025** as the anchor year for commercial discussions.
 
+## Live demo
+
+**https://ccfmck.github.io/Sightline_Commercial/**
+
+Open the link, upload an Excel workbook (`.xlsx` or `.xls`), and explore. All parsing runs in your browser — nothing is uploaded to a server.
+
 ## Quick start
 
 ```bash
