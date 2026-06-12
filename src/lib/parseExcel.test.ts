@@ -34,6 +34,8 @@ const fixtureGrid = [
 
   ['GM', 'Program B', 'Plant 2', '108', '700', '45', '22', '110', '800', '100', '900', '44', '23', '92', '1000', '46', '24'],
 
+  ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+
 ];
 
 
@@ -91,6 +93,13 @@ describe('parseWorkbookGrid', () => {
       labels.indexOf(String(DEFAULT_ANCHOR_YEAR) as `${number}`),
     );
 
+  });
+
+
+
+  it('omits blank spacer rows without program/part identity', () => {
+    const result = parseWorkbookGrid(fixtureGrid, 'Test');
+    expect(result.rowCount).toBe(2);
   });
 
 

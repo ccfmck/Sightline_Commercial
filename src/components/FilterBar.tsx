@@ -10,7 +10,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValueLeft,
 } from './ui/select';
 
 const FILTER_FIELDS = [
@@ -29,6 +29,7 @@ interface FilterBarProps {
   onToggleRow: (id: string) => void;
   onSelectAllFiltered: () => void;
   onClearSelection: () => void;
+  embedded?: boolean;
 }
 
 function getFieldValue(record: PartProgramRecord, key: string): string {
@@ -43,6 +44,7 @@ export function FilterBar({
   onToggleRow,
   onSelectAllFiltered,
   onClearSelection,
+  embedded = false,
 }: FilterBarProps) {
   const filterOptions = useMemo(() => {
     const options: Record<string, string[]> = {};
@@ -66,87 +68,95 @@ export function FilterBar({
     );
   }, [records, filters]);
 
+  const content = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {!embedded && <h3 className="text-base font-semibold">Filters & Selection</h3>}
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{filteredRecords.length} matching rows</Badge>
+          <Badge variant="outline">{selectedIds.size} selected</Badge>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {FILTER_FIELDS.map((field) => {
+          const available = filterOptions[field.key] ?? [];
+          if (!available.length) return null;
+          return (
+            <div key={field.key} className="space-y-1.5">
+              <Label>{field.label}</Label>
+              <Select
+                value={filters[field.key] ?? '__all__'}
+                onValueChange={(value) => onFilterChange(field.key, value)}
+              >
+                <SelectTrigger>
+                  <SelectValueLeft placeholder={`All ${field.label}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  {available.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={onSelectAllFiltered}>
+          Select all filtered
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClearSelection}>
+          Clear selection
+        </Button>
+      </div>
+
+      <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2 w-10" />
+              <th className="px-3 py-2">OEM</th>
+              <th className="px-3 py-2">Program</th>
+              <th className="px-3 py-2">Division</th>
+              <th className="px-3 py-2">Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRecords.map((record) => (
+              <tr key={record.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className="px-3 py-2">
+                  <Checkbox
+                    checked={selectedIds.has(record.id)}
+                    onCheckedChange={() => onToggleRow(record.id)}
+                  />
+                </td>
+                <td className="px-3 py-2">{record.metadata['OEM'] ?? '—'}</td>
+                <td className="px-3 py-2">{record.metadata['Program Name'] ?? '—'}</td>
+                <td className="px-3 py-2">{record.metadata['Division'] ?? '—'}</td>
+                <td className="px-3 py-2">
+                  {record.metadata['Part description'] ?? record.metadata['Part number'] ?? '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (embedded) return content;
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">Filters & Selection</CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{filteredRecords.length} matching rows</Badge>
-            <Badge variant="outline">{selectedIds.size} selected</Badge>
-          </div>
-        </div>
+        <CardTitle className="text-base">Filters & Selection</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {FILTER_FIELDS.map((field) => {
-            const available = filterOptions[field.key] ?? [];
-            if (!available.length) return null;
-            return (
-              <div key={field.key} className="space-y-1.5">
-                <Label>{field.label}</Label>
-                <Select
-                  value={filters[field.key] ?? '__all__'}
-                  onValueChange={(value) => onFilterChange(field.key, value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={`All ${field.label}`} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All</SelectItem>
-                    {available.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onSelectAllFiltered}>
-            Select all filtered
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClearSelection}>
-            Clear selection
-          </Button>
-        </div>
-
-        <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2 w-10" />
-                <th className="px-3 py-2">OEM</th>
-                <th className="px-3 py-2">Program</th>
-                <th className="px-3 py-2">Division</th>
-                <th className="px-3 py-2">Part</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map((record) => (
-                <tr key={record.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2">
-                    <Checkbox
-                      checked={selectedIds.has(record.id)}
-                      onCheckedChange={() => onToggleRow(record.id)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">{record.metadata['OEM'] ?? '—'}</td>
-                  <td className="px-3 py-2">{record.metadata['Program Name'] ?? '—'}</td>
-                  <td className="px-3 py-2">{record.metadata['Division'] ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    {record.metadata['Part description'] ?? record.metadata['Part number'] ?? '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

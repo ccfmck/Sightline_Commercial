@@ -25,18 +25,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <div className="px-4 py-8 sm:px-6 lg:px-8">
-        {error && (
-          <div className="mx-auto mb-4 max-w-7xl rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-        <Dashboard
-          parseResult={parseResult}
-          isLoading={isLoading}
-          onFileSelected={handleFileSelected}
-        />
-      </div>
+      {error && (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:px-6 lg:px-8">
+          {error}
+        </div>
+      )}
+      <Dashboard
+        parseResult={parseResult}
+        isLoading={isLoading}
+        onFileSelected={handleFileSelected}
+      />
     </div>
   );
 }

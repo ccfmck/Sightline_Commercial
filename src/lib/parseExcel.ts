@@ -7,6 +7,7 @@ import {
   hasAtQuoteSection,
 } from './detectMetrics';
 import { normalizeRecords } from './normalize';
+import { isMeaningfulPartRow } from './rowFilter';
 import {
   buildPeriods,
   deriveHistoricalYears,
@@ -14,6 +15,7 @@ import {
   getDefaultAnchorYear,
 } from './periods';
 import { normalizeCellText } from './utils';
+import { normalizeCurrencyCode } from './currency';
 
 const PREFERRED_SHEET_NAMES = ['data', 'input', 'sheet1'];
 
@@ -116,7 +118,11 @@ export function parseWorkbookGrid(grid: string[][], sheetName: string): ParseRes
   const hasAtQuote = hasAtQuoteSection(headers);
   const defaultAnchorYear = getDefaultAnchorYear(availableQuoteYears, availableHistoricalYears);
   const costComponents = deriveCostComponents(headers);
-  const dataRows = grid.slice(4).filter((row) => row.some((cell) => normalizeCellText(cell)));
+  const dataRows = grid.slice(4).filter((row) => isMeaningfulPartRow(row, headers));
+  const skippedBlankRows = grid.length - 4 - dataRows.length;
+  if (skippedBlankRows > 0) {
+    warnings.push(`Omitted ${skippedBlankRows} blank spacer row(s) without program/part identity.`);
+  }
 
   if (!hasAtQuote && !availableHistoricalYears.length) {
     warnings.push('No time periods detected from headers.');
@@ -134,6 +140,9 @@ export function parseWorkbookGrid(grid: string[][], sheetName: string): ParseRes
   }
 
   const records = normalizeRecords(dataRows, headers, costComponents);
+  const availableCurrencies = [
+    ...new Set(records.map((r) => normalizeCurrencyCode(r.metadata.Currency))),
+  ].sort();
 
   return {
     sheetName,
@@ -147,6 +156,7 @@ export function parseWorkbookGrid(grid: string[][], sheetName: string): ParseRes
     costComponents,
     records,
     rowCount: records.length,
+    availableCurrencies,
   };
 }
 
