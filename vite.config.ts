@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => ({
   base: mode === 'production' ? '/Sightline_Commercial/' : '/',
   plugins: [react(), tailwindcss()],
   test: {
-    environment: 'jsdom',
+    environment: 'node',
     globals: true,
     include: ['src/**/*.test.ts'],
   },

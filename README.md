@@ -1,6 +1,6 @@
-# Margin Erosion Analysis
+# Margin Erosion Sizing (at cost level)
 
-A client-side web tool for tier-one automotive supplier commercial teams. Upload an Excel workbook to visualize how **average price**, **volume**, and **cost components** evolve from **At Time of Quote** through annual years — with **2025** as the anchor year for commercial discussions.
+A client-side web tool for tier-one automotive supplier commercial teams. Upload an Excel workbook to size **margin erosion** and **bleeder/leaker** commercial recovery opportunities, visualize **price**, **volume**, and **cost** evolution over time, and compare each period to a configurable **anchor year**.
 
 ## Live demo
 
@@ -24,7 +24,7 @@ Open the local URL shown in the terminal (typically `http://localhost:5173`).
 - `.xlsx` (preferred)
 - `.xls`
 
-All parsing and calculations run in the browser. No backend or database is required for the MVP.
+All parsing and calculations run in the browser. No backend or database is required.
 
 ## Excel layout expectations
 
@@ -41,13 +41,33 @@ Data begins on **row 5**.
 
 ### Periods
 
-- **At Time of Quote** — treated as the **2025 quote baseline** (2025 quote price/volume + at-quote unit costs)
+- **At Time of Quote** — quote baseline (quote price/volume + at-quote unit costs)
 - **Annual years** — detected from section titles (e.g. `2024 Historical Actual`, `2026 Latest Estimate`)
-- **2025** is visually emphasized as the anchor comparison year
+- **Anchor year** — user-selectable; emphasized in charts and used for sizing comparisons
 
 ### Cost components
 
-Cost buckets are **auto-detected** from headers (not hard-coded). Blank cells are omitted from stacked bars; only explicit zeros are treated as zero.
+Cost buckets are **auto-detected** from headers (not hard-coded). Blank spacer rows without OEM/program/part identity are filtered out. Blank cost cells are omitted from stacked bars; only explicit zeros are treated as zero.
+
+### Currency
+
+Workbooks may include a `Currency` metadata column. The app supports display in **source currency** or **USD** with configurable FX rates.
+
+## Application sections
+
+1. **Data summary** — detected sheet, part count, cost components, currencies, parse warnings
+2. **Inputs & assumptions** — anchor year, target EBIT margin, external factor, capture rate, currency display, FX rates
+3. **Commercial opportunity sizing** — portfolio KPIs, per-part sizing table with basis override, detail drawer with chart
+4. **Price, cost, and margin evolution** — filter/select parts, combo chart, period summary table
+
+## Sizing logic (summary)
+
+- **Margin erosion** — compares anchor-year costs to reference frames (`At Quote` and years before anchor); sizes when price pass-through lags cost build
+- **Bleeder / leaker** — compares anchor-year EBIT margin to a target margin
+- **Full potential** — max of erosion and bleeder/leaker sizing
+- **Recovery target** — full potential × external factor × capture rate
+
+Per-part **sizing basis** can be overridden (auto, specific frame, bleeder, leaker, or exclude from totals).
 
 ## Scripts
 
@@ -63,32 +83,46 @@ Cost buckets are **auto-detected** from headers (not hard-coded). Blank cells ar
 ```
 src/
   lib/
-    parseExcel.ts      — workbook ingestion & 4-row header parsing
-    detectMetrics.ts   — column classification (price, volume, cost, metadata)
-    normalize.ts       — rows → typed PartProgramRecord
-    aggregate.ts       — single-row & volume-weighted multi-row aggregation
+    parseExcel.ts        — workbook ingestion & 4-row header parsing
+    detectMetrics.ts     — column classification (price, volume, cost, metadata)
+    normalize.ts         — rows → typed PartProgramRecord
+    rowFilter.ts         — blank/spacer row filtering
+    aggregate.ts         — single-row & volume-weighted multi-row aggregation
+    opportunitySizing.ts — margin erosion & bleeder/leaker sizing engine
+    currency.ts          — FX conversion for display
+    format.ts            — number/currency formatting
   types/
     index.ts
   components/
+    AppBanner.tsx
+    SectionNav.tsx
     ExcelUpload.tsx
+    InputsAssumptionsPanel.tsx
+    OpportunityPanel.tsx
+    OpportunityDetailDrawer.tsx
     FilterBar.tsx
     MarginChart.tsx
+    MarginPerformanceChart.tsx
     VolumeTable.tsx
     Dashboard.tsx
   App.tsx
+scripts/
+  parse-sample.ts        — CLI helper for debugging Excel parsing
+data/
+  Silver - Brazil test data.xlsx
 ```
 
-## MVP workflow
+## Workflow
 
 1. Upload an Excel workbook
 2. Review detected sheet, periods, cost components, and any parse warnings
-3. Filter by Division, Program, OEM, Part
-4. Select one or more rows
-5. View the combo chart (stacked costs + average price line) and period summary table
+3. Set anchor year, margin targets, haircuts, and currency/FX assumptions
+4. Review portfolio sizing totals and per-part table; override sizing basis as needed
+5. Double-click a row for part-level chart and sizing detail
+6. Filter and select parts to view aggregated price/cost/margin evolution
 
-## Out of scope (MVP)
+## Not yet implemented
 
-- Base price toggle
 - Export to PowerPoint/PDF
 - Authentication / backend API
-- Automated opportunity scoring
+- Multi-currency aggregation in charts when parts with mixed currencies are selected together
