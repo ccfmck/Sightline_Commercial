@@ -28,7 +28,7 @@ export function ExcelUpload({ onFileSelected, isLoading }: ExcelUploadProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileSpreadsheet className="h-5 w-5 text-slate-700" />
-          Margin Erosion Analysis
+          Sightline Commercial
         </CardTitle>
         <CardDescription>
           Upload your commercial program workbook to visualize price, volume, and cost trends.
