@@ -1,26 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   AppDisplaySettings,
+  MarginPercentSettings,
   OpportunitySettings,
   ParseResult,
+  RowMarginPercentOverride,
+  RowMarginPercentOverrides,
   RowOpportunityOverride,
   RowOpportunityOverrides,
 } from '../types';
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_OPPORTUNITY_SETTINGS } from '../types';
 import { aggregateRecords } from '../lib/aggregate';
 import { normalizeCurrencyCode } from '../lib/currency';
+import { buildDefaultMarginPercentSettings } from '../lib/marginComponentDefaults';
+import { sizePortfolioMarginPercentOpportunity } from '../lib/marginPercentSizing';
 import { buildBasisOptions, buildOpportunityFrames, sizePortfolioOpportunity } from '../lib/opportunitySizing';
 import { buildPeriods, getAvailableAnchorYears } from '../lib/periods';
 import { AppBanner } from './AppBanner';
+import { AppTabNav, type AppTabId } from './AppTabNav';
+import { CostLevelSizingTab } from './CostLevelSizingTab';
+import { DataAssumptionsTab } from './DataAssumptionsTab';
 import { ExcelUpload } from './ExcelUpload';
-import { FilterBar } from './FilterBar';
-import { InputsAssumptionsPanel } from './InputsAssumptionsPanel';
-import { MarginChart } from './MarginChart';
-import { OpportunityPanel } from './OpportunityPanel';
-import { SectionNav } from './SectionNav';
-import { VolumeTable } from './VolumeTable';
-import { Badge } from './ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { MarginPercentSizingTab } from './MarginPercentSizingTab';
+import { TabSectionNav } from './TabSectionNav';
+import { getTabSections, PAGE_CHROME_OFFSET } from './tabSections';
 
 interface DashboardProps {
   parseResult: ParseResult | null;
@@ -29,6 +32,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardProps) {
+  const [activeTab, setActiveTab] = useState<AppTabId>('data');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorYear, setAnchorYear] = useState<number | null>(null);
@@ -39,6 +43,11 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
     DEFAULT_DISPLAY_SETTINGS,
   );
   const [rowOverrides, setRowOverrides] = useState<RowOpportunityOverrides>({});
+  const [rowOverridesMarginPercent, setRowOverridesMarginPercent] =
+    useState<RowMarginPercentOverrides>({});
+  const [marginPercentSettings, setMarginPercentSettings] = useState<MarginPercentSettings | null>(
+    null,
+  );
 
   const availableAnchorYears = useMemo(
     () => (parseResult ? getAvailableAnchorYears(parseResult) : []),
@@ -56,6 +65,9 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
       setFilters({});
       setSelectedIds(new Set());
       setRowOverrides({});
+      setRowOverridesMarginPercent({});
+      setMarginPercentSettings(buildDefaultMarginPercentSettings(parseResult.costComponents));
+      setActiveTab('data');
       setDisplaySettings((prev) => {
         const fxRatesToUsd: Record<string, number> = { ...prev.fxRatesToUsd };
         for (const currency of parseResult.availableCurrencies) {
@@ -128,8 +140,40 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
     );
   }, [parseResult, anchorYear, opportunitySettings, rowOverrides]);
 
+  const portfolioMarginPercent = useMemo(() => {
+    if (!parseResult || anchorYear === null || marginPercentSettings === null) return null;
+    return sizePortfolioMarginPercentOpportunity(
+      parseResult.records,
+      anchorYear,
+      parseResult.hasAtQuote,
+      parseResult.availableHistoricalYears,
+      opportunitySettings,
+      marginPercentSettings,
+      rowOverridesMarginPercent,
+    );
+  }, [
+    parseResult,
+    anchorYear,
+    opportunitySettings,
+    marginPercentSettings,
+    rowOverridesMarginPercent,
+  ]);
+
   function handleRowOverrideChange(recordId: string, override: RowOpportunityOverride) {
     setRowOverrides((prev) => ({
+      ...prev,
+      [recordId]: {
+        ...prev[recordId],
+        ...override,
+      },
+    }));
+  }
+
+  function handleRowMarginPercentOverrideChange(
+    recordId: string,
+    override: RowMarginPercentOverride,
+  ) {
+    setRowOverridesMarginPercent((prev) => ({
       ...prev,
       [recordId]: {
         ...prev[recordId],
@@ -141,84 +185,60 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
   if (!parseResult) {
     return (
       <>
-        <AppBanner />
-        <div className="px-4 py-8 sm:px-6 lg:px-8">
+        <AppBanner fixed />
+        <div className="px-4 pb-8 pt-[4.5rem] sm:px-6 lg:px-8">
           <ExcelUpload onFileSelected={onFileSelected} isLoading={isLoading} />
         </div>
       </>
     );
   }
 
-  const currencySummary = parseResult.availableCurrencies.join(', ') || 'USD';
+  const tabSections = getTabSections(activeTab);
 
   return (
     <>
-      <AppBanner />
-      <SectionNav />
+      <AppBanner activeTab={activeTab} fixed />
+      <TabSectionNav sections={tabSections} fixed />
+      <AppTabNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className="w-full space-y-6 px-3 py-6 sm:px-4 lg:pl-56 lg:pr-6 xl:pl-60 xl:pr-8">
-        <Card id="data-summary">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Data summary</CardTitle>
-            <CardDescription>Workbook metadata detected from the uploaded file.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">Sheet: {parseResult.sheetName}</Badge>
-              <Badge variant="secondary">{parseResult.rowCount} parts</Badge>
-              <Badge variant="outline">Currencies: {currencySummary}</Badge>
-              {parseResult.warnings.map((warning) => (
-                <Badge key={warning} variant="accent" className="max-w-full whitespace-normal">
-                  {warning}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {anchorYear !== null && (
-          <InputsAssumptionsPanel
+      <div
+        className="w-full space-y-6 px-3 pb-6 sm:px-4 lg:pl-56 lg:pr-6 xl:pl-60 xl:pr-8"
+        style={{ paddingTop: PAGE_CHROME_OFFSET + 16 }}
+      >
+        {activeTab === 'data' && anchorYear !== null && marginPercentSettings !== null && (
+          <DataAssumptionsTab
+            parseResult={parseResult}
+            isLoading={isLoading}
             anchorYear={anchorYear}
             availableAnchorYears={availableAnchorYears}
-            quoteYears={parseResult.availableQuoteYears}
             opportunitySettings={opportunitySettings}
             displaySettings={displaySettings}
             nonUsdCurrencies={nonUsdCurrencies}
+            onFileSelected={onFileSelected}
             onAnchorYearChange={setAnchorYear}
             onOpportunitySettingsChange={setOpportunitySettings}
             onDisplaySettingsChange={setDisplaySettings}
           />
         )}
 
-        {portfolioOpportunity && anchorYear !== null && (
-          <OpportunityPanel
-            portfolio={portfolioOpportunity}
-            settings={opportunitySettings}
-            displaySettings={displaySettings}
-            nonUsdCurrencies={nonUsdCurrencies}
-            basisOptions={basisOptions}
-            rowOverrides={rowOverrides}
-            records={parseResult.records}
-            periods={periods}
-            costComponents={parseResult.costComponents}
-            onRowOverrideChange={handleRowOverrideChange}
-            highlightedRecordIds={selectedIds}
-          />
-        )}
-
-        <Card id="price-cost-evolution">
-          <CardHeader>
-            <CardTitle className="text-base">Price, Cost, and Margin evolution</CardTitle>
-            <CardDescription>
-              Filter and select parts to compare price, cost, and margin performance over time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <FilterBar
-              embedded
-              records={parseResult.records}
+        {activeTab === 'cost-level' &&
+          portfolioOpportunity &&
+          anchorYear !== null && (
+            <CostLevelSizingTab
+              parseResult={parseResult}
+              opportunitySettings={opportunitySettings}
+              displaySettings={displaySettings}
+              nonUsdCurrencies={nonUsdCurrencies}
+              basisOptions={basisOptions}
+              rowOverrides={rowOverrides}
+              portfolioOpportunity={portfolioOpportunity}
+              periods={periods}
               filters={filters}
               selectedIds={selectedIds}
+              selectedRecords={selectedRecords}
+              aggregation={aggregation}
+              chartSourceCurrency={chartSourceCurrency}
+              onRowOverrideChange={handleRowOverrideChange}
               onFilterChange={(key, value) => setFilters((prev) => ({ ...prev, [key]: value }))}
               onToggleRow={(id) => {
                 setSelectedIds((prev) => {
@@ -231,42 +251,24 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
               onSelectAllFiltered={() => setSelectedIds(new Set(filteredRecords.map((r) => r.id)))}
               onClearSelection={() => setSelectedIds(new Set())}
             />
+          )}
 
-            {!selectedRecords.length ? (
-              <div className="py-12 text-center text-sm text-slate-500">
-                Select one or more programs/parts above to view margin and cost performance.
-              </div>
-            ) : aggregation ? (
-              <>
-                <MarginChart
-                  aggregation={aggregation}
-                  displaySettings={displaySettings}
-                  sourceCurrency={chartSourceCurrency}
-                />
-                <VolumeTable aggregation={aggregation} embedded />
-              </>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <div className="text-center">
-          <button
-            type="button"
-            className="text-sm text-slate-500 underline hover:text-slate-700"
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = '.xlsx,.xls';
-              input.onchange = () => {
-                const file = input.files?.[0];
-                if (file) onFileSelected(file);
-              };
-              input.click();
-            }}
-          >
-            Upload a different workbook
-          </button>
-        </div>
+        {activeTab === 'margin-percent' &&
+          portfolioMarginPercent &&
+          marginPercentSettings &&
+          anchorYear !== null && (
+            <MarginPercentSizingTab
+              parseResult={parseResult}
+              opportunitySettings={opportunitySettings}
+              marginPercentSettings={marginPercentSettings}
+              displaySettings={displaySettings}
+              nonUsdCurrencies={nonUsdCurrencies}
+              rowOverrides={rowOverridesMarginPercent}
+              portfolioOpportunity={portfolioMarginPercent}
+              onMarginPercentSettingsChange={setMarginPercentSettings}
+              onRowOverrideChange={handleRowMarginPercentOverrideChange}
+            />
+          )}
       </div>
     </>
   );

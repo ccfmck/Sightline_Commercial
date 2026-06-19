@@ -4,6 +4,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
+import { dataTableClassName, TableHeaderCell } from './ui/table-header-cell';
 import { Label } from './ui/label';
 import {
   Select,
@@ -116,14 +117,14 @@ export function FilterBar({
       </div>
 
       <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+        <table className={dataTableClassName}>
+          <thead className="sticky top-0 z-10">
             <tr>
-              <th className="px-3 py-2 w-10" />
-              <th className="px-3 py-2">OEM</th>
-              <th className="px-3 py-2">Program</th>
-              <th className="px-3 py-2">Division</th>
-              <th className="px-3 py-2">Part</th>
+              <TableHeaderCell widthClass="w-10" />
+              <TableHeaderCell widthClass="w-[5rem]">OEM</TableHeaderCell>
+              <TableHeaderCell widthClass="w-[6rem]">Program</TableHeaderCell>
+              <TableHeaderCell widthClass="w-[5rem]">Division</TableHeaderCell>
+              <TableHeaderCell widthClass="w-[7rem]">Part</TableHeaderCell>
             </tr>
           </thead>
           <tbody>
@@ -135,10 +136,10 @@ export function FilterBar({
                     onCheckedChange={() => onToggleRow(record.id)}
                   />
                 </td>
-                <td className="px-3 py-2">{record.metadata['OEM'] ?? '—'}</td>
-                <td className="px-3 py-2">{record.metadata['Program Name'] ?? '—'}</td>
-                <td className="px-3 py-2">{record.metadata['Division'] ?? '—'}</td>
-                <td className="px-3 py-2">
+                <td className="truncate px-3 py-2">{record.metadata['OEM'] ?? '—'}</td>
+                <td className="truncate px-3 py-2">{record.metadata['Program Name'] ?? '—'}</td>
+                <td className="truncate px-3 py-2">{record.metadata['Division'] ?? '—'}</td>
+                <td className="truncate px-3 py-2">
                   {record.metadata['Part description'] ?? record.metadata['Part number'] ?? '—'}
                 </td>
               </tr>

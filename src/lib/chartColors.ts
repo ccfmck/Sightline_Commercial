@@ -18,3 +18,7 @@ export function getCostComponentColor(index: number): string {
 }
 
 export const PRICE_LINE_COLOR = '#dc2626';
+
+export const ANCHOR_BAR_COLOR = '#d97706';
+export const BEST_MARGIN_BAR_COLOR = '#059669';
+export const REFERENCE_MARGIN_BAR_COLOR = '#457b9d';

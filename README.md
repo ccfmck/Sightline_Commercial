@@ -1,6 +1,6 @@
-# Margin Erosion Sizing (at cost level)
+# Sightline Commercial
 
-A client-side web tool for tier-one automotive supplier commercial teams. Upload an Excel workbook to size **margin erosion** and **bleeder/leaker** commercial recovery opportunities, visualize **price**, **volume**, and **cost** evolution over time, and compare each period to a configurable **anchor year**.
+A client-side web tool for tier-one automotive supplier commercial teams. Upload an Excel workbook to size **margin erosion** and **bleeder/leaker** commercial recovery opportunities at the **cost-component** or **margin-%** level, visualize **price**, **volume**, and **cost** evolution over time, and compare each period to a configurable **anchor year**.
 
 ## Live demo
 
@@ -53,14 +53,29 @@ Cost buckets are **auto-detected** from headers (not hard-coded). Blank spacer r
 
 Workbooks may include a `Currency` metadata column. The app supports display in **source currency** or **USD** with configurable FX rates.
 
-## Application sections
+## Application tabs
 
-1. **Data summary** — detected sheet, part count, cost components, currencies, parse warnings
-2. **Inputs & assumptions** — anchor year, target EBIT margin, external factor, capture rate, currency display, FX rates
-3. **Commercial opportunity sizing** — portfolio KPIs, per-part sizing table with basis override, detail drawer with chart
-4. **Price, cost, and margin evolution** — filter/select parts, combo chart, period summary table
+The left sidebar switches between three views. Each tab has a horizontal **Jump to** bar for its sections.
+
+### Tab 1 — Data & assumptions
+
+1. **Upload** — upload or replace the workbook
+2. **Data summary** — detected sheet, part count, currencies, parse warnings
+3. **Inputs & assumptions** — anchor year, target EBIT margin, external factor, capture rate, currency display, FX rates
+
+### Tab 2 — Margin erosion sizing (at cost level)
+
+1. **Commercial opportunity sizing** — portfolio KPIs, per-part sizing table with basis override, detail drawer with chart
+2. **Price, cost, and margin evolution** — filter/select parts, combo chart, period summary table
+
+### Tab 3 — Margin erosion sizing (at margin % level)
+
+1. **Margin configuration** — choose material, contribution, or EBIT margin to optimize; map cost components to margin levels (cumulative buckets)
+2. **Commercial opportunity sizing** — portfolio KPIs and per-part table sized to close the gap between anchor-year margin and the best reference-frame margin
 
 ## Sizing logic (summary)
+
+### At cost level (Tab 2)
 
 - **Margin erosion** — compares anchor-year costs to reference frames (`At Quote` and years before anchor); sizes when price pass-through lags cost build
 - **Bleeder / leaker** — compares anchor-year EBIT margin to a target margin
@@ -68,6 +83,15 @@ Workbooks may include a `Currency` metadata column. The app supports display in 
 - **Recovery target** — full potential × external factor × capture rate
 
 Per-part **sizing basis** can be overridden (auto, specific frame, bleeder, leaker, or exclude from totals).
+
+### At margin % level (Tab 3)
+
+- **Margin gap** — for each part, compares anchor-year margin % (material, contribution, or EBIT per user config) to all reference frames and sizes price uplift to reach the **highest** reference margin
+- **Bleeder / leaker** — same EBIT-based logic as Tab 2, regardless of which margin type is selected for optimization
+- **Full potential** — max of margin-gap and bleeder/leaker sizing
+- **Recovery target** — same haircut formula as Tab 2
+
+Per-part **sizing basis** can be overridden (auto, bleeder, leaker, or exclude from totals).
 
 ## Scripts
 
@@ -88,14 +112,23 @@ src/
     normalize.ts         — rows → typed PartProgramRecord
     rowFilter.ts         — blank/spacer row filtering
     aggregate.ts         — single-row & volume-weighted multi-row aggregation
-    opportunitySizing.ts — margin erosion & bleeder/leaker sizing engine
+    opportunitySizing.ts     — margin erosion & bleeder/leaker sizing (cost level)
+    marginPercentSizing.ts   — margin-% gap sizing & bleeder/leaker (margin % level)
+    marginComponentDefaults.ts — default cost-component → margin level mapping
     currency.ts          — FX conversion for display
     format.ts            — number/currency formatting
   types/
     index.ts
   components/
     AppBanner.tsx
-    SectionNav.tsx
+    AppTabNav.tsx
+    TabSectionNav.tsx
+    DataAssumptionsTab.tsx
+    CostLevelSizingTab.tsx
+    MarginPercentSizingTab.tsx
+    MarginComponentMappingPanel.tsx
+    MarginPercentOpportunityPanel.tsx
+    MarginPercentDetailDrawer.tsx
     ExcelUpload.tsx
     InputsAssumptionsPanel.tsx
     OpportunityPanel.tsx
@@ -114,12 +147,12 @@ data/
 
 ## Workflow
 
-1. Upload an Excel workbook
+1. Upload an Excel workbook (Tab 1)
 2. Review detected sheet, periods, cost components, and any parse warnings
 3. Set anchor year, margin targets, haircuts, and currency/FX assumptions
-4. Review portfolio sizing totals and per-part table; override sizing basis as needed
-5. Double-click a row for part-level chart and sizing detail
-6. Filter and select parts to view aggregated price/cost/margin evolution
+4. **Cost level tab** — review portfolio sizing totals and per-part table; override sizing basis as needed; filter parts for price/cost/margin charts
+5. **Margin % tab** — configure margin type and cost-component mapping; review margin-gap sizing and override basis as needed
+6. Double-click a row in either sizing table for part-level detail
 
 ## Not yet implemented
 

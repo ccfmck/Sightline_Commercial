@@ -2,6 +2,7 @@ import type { AggregationResult } from '../types';
 import { formatPeriodAxisLabel } from '../lib/aggregate';
 import { formatMarginPercent, formatUnitValue, formatVolume } from '../lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { dataTableClassName, TableHeaderCell } from './ui/table-header-cell';
 import { cn } from '../lib/utils';
 
 interface VolumeTableProps {
@@ -14,14 +15,22 @@ export function VolumeTable({ aggregation, embedded = false }: VolumeTableProps)
 
   const table = (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-sm">
+      <table className={cn(dataTableClassName, 'min-w-[640px]')}>
           <thead>
-            <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2">Period</th>
-              <th className="px-3 py-2 text-right">Volume</th>
-              <th className="px-3 py-2 text-right">Avg Price</th>
-              <th className="px-3 py-2 text-right">Total Cost</th>
-              <th className="px-3 py-2 text-right">EBIT Margin</th>
+            <tr>
+              <TableHeaderCell widthClass="w-[8rem]">Period</TableHeaderCell>
+              <TableHeaderCell widthClass="w-[5rem]" align="right">
+                Volume
+              </TableHeaderCell>
+              <TableHeaderCell widthClass="w-[5.5rem]" align="right">
+                Avg Price
+              </TableHeaderCell>
+              <TableHeaderCell widthClass="w-[5.5rem]" align="right">
+                Total Cost
+              </TableHeaderCell>
+              <TableHeaderCell widthClass="w-[5rem]" align="right">
+                EBIT Margin
+              </TableHeaderCell>
             </tr>
           </thead>
           <tbody>
@@ -42,7 +51,7 @@ export function VolumeTable({ aggregation, embedded = false }: VolumeTableProps)
                 <td className="px-3 py-2 text-right tabular-nums">{formatVolume(period.volume)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatUnitValue(period.avgPrice)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatUnitValue(period.totalCost)}</td>
-                <td className="px-3 py-2 text-right tabular-nums font-medium">
+                <td className="px-3 py-2 text-right font-medium tabular-nums">
                   {formatMarginPercent(period.ebitMarginPercent)}
                 </td>
               </tr>
@@ -70,4 +79,3 @@ export function VolumeTable({ aggregation, embedded = false }: VolumeTableProps)
     </Card>
   );
 }
-

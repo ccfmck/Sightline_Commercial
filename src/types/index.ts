@@ -198,3 +198,90 @@ export interface PortfolioOpportunityResult {
   compositionByWinner: Record<string, number>;
 }
 
+export type MarginLevel = 'material' | 'contribution' | 'ebit';
+
+export type MarginOptimizeFor = MarginLevel;
+
+export interface MarginPercentSettings {
+  optimizeFor: MarginOptimizeFor;
+  componentLevels: Record<string, MarginLevel>;
+}
+
+export type MarginPercentBasisId = 'auto' | 'exclude' | OpportunityFrameId | 'bleeder' | 'leaker';
+
+export interface RowMarginPercentOverride {
+  basis?: MarginPercentBasisId;
+  excluded?: boolean;
+}
+
+export type RowMarginPercentOverrides = Record<string, RowMarginPercentOverride>;
+
+export type MarginPercentWinningMethod = 'margin_percent_gap' | 'bleeder_leaker';
+
+export type RowMarginPercentStatus = 'margin_gap' | 'bleeder' | 'leaker' | 'healthy' | 'no_data';
+
+export interface MarginPercentFrameDetail {
+  frameId: OpportunityFrameId;
+  frameLabel: string;
+  referencePrice: number | null;
+  referenceMarginCost: number | null;
+  referenceMarginPercent: number | null;
+  unitOpportunity: number;
+  targetPrice: number;
+  dollarOpportunity: number;
+  skipped: boolean;
+  skipReason?: string;
+}
+
+export interface MarginPercentGapResult {
+  optimizeFor: MarginOptimizeFor;
+  anchorMarginCost: number | null;
+  anchorMarginPercent: number | null;
+  marginPercentByFrame: MarginPercentFrameDetail[];
+  bestReferenceFrameId: OpportunityFrameId | null;
+  bestReferenceFrameLabel: string | null;
+  bestReferenceMarginPercent: number | null;
+  unitOpportunity: number;
+  targetPriceIncrease: number;
+  targetPrice: number;
+  dollarOpportunity: number;
+  skipped: boolean;
+  skipReason?: string;
+}
+
+export interface RowMarginPercentOpportunityResult {
+  recordId: string;
+  metadata: Record<string, string>;
+  currency: string;
+  anchorYear: number;
+  anchorPrice: number | null;
+  anchorVolume: number | null;
+  anchorTotalCost: number | null;
+  anchorEbitMarginPercent: number | null;
+  status: RowMarginPercentStatus;
+  marginPercentGap: MarginPercentGapResult;
+  bleederLeaker: BleederLeakerResult;
+  autoWinningMethod: MarginPercentWinningMethod | null;
+  autoWinningFrameLabel: string | null;
+  autoFullPotential: number;
+  winningMethod: MarginPercentWinningMethod | null;
+  winningFrameLabel: string | null;
+  selectedBasis: MarginPercentBasisId;
+  targetPrice: number | null;
+  targetPriceIncrease: number | null;
+  fullPotential: number;
+  commercialRecovery: number;
+  excluded: boolean;
+}
+
+export interface PortfolioMarginPercentOpportunityResult {
+  settings: OpportunitySettings;
+  marginPercentSettings: MarginPercentSettings;
+  anchorYear: number;
+  rows: RowMarginPercentOpportunityResult[];
+  totalFullPotential: number;
+  totalCommercialRecovery: number;
+  rowsWithOpportunity: number;
+  compositionByWinner: Record<string, number>;
+}
+

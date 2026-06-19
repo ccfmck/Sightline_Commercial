@@ -1,5 +1,6 @@
 import type { AppDisplaySettings, OpportunitySettings } from '../types';
 import { anchorYearLabel } from '../lib/opportunitySizing';
+import { PAGE_CHROME_OFFSET } from './tabSections';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import {
@@ -57,7 +58,7 @@ export function InputsAssumptionsPanel({
   }
 
   return (
-    <Card id="inputs-assumptions">
+    <Card id="inputs-assumptions" style={{ scrollMarginTop: PAGE_CHROME_OFFSET + 12 }}>
       <CardHeader>
         <CardTitle className="text-base">Additional Input and Assumptions</CardTitle>
         <CardDescription>

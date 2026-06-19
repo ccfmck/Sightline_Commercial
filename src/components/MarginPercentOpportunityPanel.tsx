@@ -2,24 +2,25 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type {
   AppDisplaySettings,
-  OpportunityBasisId,
+  MarginPercentBasisId,
+  MarginPercentSettings,
   OpportunitySettings,
-  PartProgramRecord,
-  PeriodDefinition,
-  PortfolioOpportunityResult,
-  RowOpportunityOverride,
-  RowOpportunityOverrides,
-  RowOpportunityResult,
+  PortfolioMarginPercentOpportunityResult,
+  RowMarginPercentOpportunityResult,
+  RowMarginPercentOverride,
+  RowMarginPercentOverrides,
+  RowMarginPercentStatus,
 } from '../types';
-import { aggregateRecords } from '../lib/aggregate';
 import { convertToDisplayCurrency, getDisplayCurrencyCode } from '../lib/currency';
-import {
-  anchorYearLabel,
-  getWinningBasisLabel,
-} from '../lib/opportunitySizing';
-import { formatCurrency, formatMarginPercent, formatPercentInput, formatUnitValueWithCurrency } from '../lib/format';
+import { formatCurrency, formatMarginPercent, formatUnitValueWithCurrency } from '../lib/format';
 import { getCostComponentColor } from '../lib/chartColors';
-import { OpportunityDetailDrawer } from './OpportunityDetailDrawer';
+import {
+  getMarginPercentWinningBasisLabel,
+  marginGapStatusLabel,
+  optimizeForLabel,
+} from '../lib/marginPercentSizing';
+import { anchorYearLabel } from '../lib/opportunitySizing';
+import { MarginPercentDetailDrawer } from './MarginPercentDetailDrawer';
 import { PAGE_CHROME_OFFSET } from './tabSections';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -40,30 +41,29 @@ type SortKey =
   | 'oem'
   | 'program'
   | 'part'
-  | 'anchorPrice';
+  | 'anchorPrice'
+  | 'anchorMargin';
 type SortDir = 'asc' | 'desc';
 
-interface OpportunityPanelProps {
-  portfolio: PortfolioOpportunityResult;
+interface MarginPercentOpportunityPanelProps {
+  portfolio: PortfolioMarginPercentOpportunityResult;
   settings: OpportunitySettings;
+  marginPercentSettings: MarginPercentSettings;
   displaySettings: AppDisplaySettings;
   nonUsdCurrencies: string[];
-  basisOptions: { id: OpportunityBasisId; label: string }[];
-  rowOverrides: RowOpportunityOverrides;
-  records: PartProgramRecord[];
-  periods: PeriodDefinition[];
-  costComponents: string[];
-  onRowOverrideChange: (recordId: string, override: RowOpportunityOverride) => void;
+  basisOptions: { id: MarginPercentBasisId; label: string }[];
+  rowOverrides: RowMarginPercentOverrides;
+  onRowOverrideChange: (recordId: string, override: RowMarginPercentOverride) => void;
   highlightedRecordIds?: Set<string>;
 }
 
-function statusBadgeVariant(status: RowOpportunityResult['status']) {
+function statusBadgeVariant(status: RowMarginPercentStatus) {
   switch (status) {
     case 'bleeder':
       return 'default';
     case 'leaker':
       return 'accent';
-    case 'erosion':
+    case 'margin_gap':
       return 'secondary';
     case 'healthy':
       return 'outline';
@@ -72,24 +72,9 @@ function statusBadgeVariant(status: RowOpportunityResult['status']) {
   }
 }
 
-function statusLabel(status: RowOpportunityResult['status']): string {
-  switch (status) {
-    case 'bleeder':
-      return 'Bleeder';
-    case 'leaker':
-      return 'Leaker';
-    case 'erosion':
-      return 'Margin Erosion';
-    case 'healthy':
-      return 'Healthy';
-    default:
-      return 'No data';
-  }
-}
-
 function formatRowMoney(
   amount: number,
-  row: RowOpportunityResult,
+  row: RowMarginPercentOpportunityResult,
   displaySettings: AppDisplaySettings,
 ): string {
   const converted = convertToDisplayCurrency(amount, row.currency, displaySettings);
@@ -99,7 +84,7 @@ function formatRowMoney(
 
 function formatRowUnit(
   amount: number | null | undefined,
-  row: RowOpportunityResult,
+  row: RowMarginPercentOpportunityResult,
   displaySettings: AppDisplaySettings,
 ): string {
   if (amount === null || amount === undefined) return '—';
@@ -109,18 +94,18 @@ function formatRowUnit(
 }
 
 function getBasisSelectValue(
-  override: RowOpportunityOverride | undefined,
-  row: RowOpportunityResult,
-): OpportunityBasisId {
+  override: RowMarginPercentOverride | undefined,
+  row: RowMarginPercentOpportunityResult,
+): MarginPercentBasisId {
   if (override?.basis === 'exclude' || override?.excluded || row.excluded) return 'exclude';
   return override?.basis ?? row.selectedBasis ?? 'auto';
 }
 
 function sortRows(
-  rows: RowOpportunityResult[],
+  rows: RowMarginPercentOpportunityResult[],
   sortKey: SortKey,
   sortDir: SortDir,
-): RowOpportunityResult[] {
+): RowMarginPercentOpportunityResult[] {
   const sorted = [...rows];
   const dir = sortDir === 'asc' ? 1 : -1;
 
@@ -132,6 +117,12 @@ function sortRows(
         return (a.fullPotential - b.fullPotential) * dir;
       case 'anchorPrice':
         return ((a.anchorPrice ?? 0) - (b.anchorPrice ?? 0)) * dir;
+      case 'anchorMargin':
+        return (
+          ((a.marginPercentGap.anchorMarginPercent ?? 0) -
+            (b.marginPercentGap.anchorMarginPercent ?? 0)) *
+          dir
+        );
       case 'oem':
         return (a.metadata.OEM ?? '').localeCompare(b.metadata.OEM ?? '') * dir;
       case 'program':
@@ -157,6 +148,8 @@ function sortKeyLabel(key: SortKey): string {
       return 'Full potential';
     case 'anchorPrice':
       return 'Anchor price';
+    case 'anchorMargin':
+      return 'Anchor margin %';
     case 'oem':
       return 'OEM';
     case 'program':
@@ -168,19 +161,21 @@ function sortKeyLabel(key: SortKey): string {
   }
 }
 
-export function OpportunityPanel({
+function formatPercentInput(value: number): string {
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+}
+
+export function MarginPercentOpportunityPanel({
   portfolio,
   settings,
+  marginPercentSettings,
   displaySettings,
   nonUsdCurrencies,
   basisOptions,
   rowOverrides,
-  records,
-  periods,
-  costComponents,
   onRowOverrideChange,
   highlightedRecordIds,
-}: OpportunityPanelProps) {
+}: MarginPercentOpportunityPanelProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('commercialRecovery');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -199,7 +194,7 @@ export function OpportunityPanel({
     const byId = new Map(portfolio.rows.map((row) => [row.recordId, row]));
     const ordered = rowOrder
       .map((id) => byId.get(id))
-      .filter((row): row is RowOpportunityResult => row !== undefined);
+      .filter((row): row is RowMarginPercentOpportunityResult => row !== undefined);
 
     for (const row of portfolio.rows) {
       if (!rowOrder.includes(row.recordId)) {
@@ -213,10 +208,7 @@ export function OpportunityPanel({
   const anchorLabel = anchorYearLabel(portfolio.anchorYear);
   const effectiveRecoveryPct =
     (settings.externalFactorPercent * settings.captureRatePercent) / 100;
-
-  const recordsById = useMemo(() => {
-    return new Map(records.map((record) => [record.id, record]));
-  }, [records]);
+  const optimizeLabel = optimizeForLabel(marginPercentSettings.optimizeFor);
 
   const displayTotals = useMemo(() => {
     let totalFullPotential = 0;
@@ -241,7 +233,7 @@ export function OpportunityPanel({
       if (commercialRecovery <= 0) continue;
 
       const winnerKey =
-        row.winningMethod === 'margin_erosion' && row.winningFrameLabel
+        row.winningMethod === 'margin_percent_gap' && row.winningFrameLabel
           ? row.winningFrameLabel
           : row.winningMethod === 'bleeder_leaker'
             ? row.bleederLeaker.classification === 'bleeder'
@@ -254,11 +246,6 @@ export function OpportunityPanel({
 
     return { totalFullPotential, totalCommercialRecovery, rowsWithOpportunity, compositionByWinner };
   }, [portfolio.rows, displaySettings]);
-
-  function applySort() {
-    const sorted = sortRows(portfolio.rows, sortKey, sortDir);
-    setRowOrder(sorted.map((row) => row.recordId));
-  }
 
   const compositionData = useMemo(() => {
     return Object.entries(displayTotals.compositionByWinner)
@@ -275,9 +262,7 @@ export function OpportunityPanel({
   }, [compositionData]);
 
   const portfolioCurrencyCode =
-    displaySettings.displayCurrency === 'USD'
-      ? 'USD'
-      : nonUsdCurrencies[0] ?? 'USD';
+    displaySettings.displayCurrency === 'USD' ? 'USD' : (nonUsdCurrencies[0] ?? 'USD');
 
   function setSortPreference(key: SortKey) {
     if (sortKey === key) {
@@ -297,13 +282,21 @@ export function OpportunityPanel({
     setExpandedId((prev) => (prev === recordId ? null : recordId));
   }
 
+  function applySort() {
+    const sorted = sortRows(portfolio.rows, sortKey, sortDir);
+    setRowOrder(sorted.map((row) => row.recordId));
+  }
+
   return (
-    <Card id="commercial-opportunity-sizing" style={{ scrollMarginTop: PAGE_CHROME_OFFSET + 12 }}>
+    <Card id="margin-percent-opportunity-sizing" style={{ scrollMarginTop: PAGE_CHROME_OFFSET + 12 }}>
       <CardHeader>
         <CardTitle className="text-base">Commercial Opportunity Sizing</CardTitle>
         <CardDescription>
-          Portfolio-wide sizing for all {portfolio.rows.length} parts. Override the sizing basis per
-          part, or choose &quot;Exclude from sizing&quot; to omit from totals.
+          Portfolio-wide sizing for all {portfolio.rows.length} parts using{' '}
+          {optimizeLabel.toLowerCase()}. Compares anchor-year margin to reference frames and sizes
+          price uplift to close the gap. Override the sizing basis per part to true up against a
+          specific frame, or choose bleeder/leaker recovery. Bleeder/leaker uses EBIT margin
+          regardless of optimize-for selection.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -342,9 +335,7 @@ export function OpportunityPanel({
 
         {compositionData.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-medium text-slate-900">
-              Recovery by winning basis
-            </h3>
+            <h3 className="mb-2 text-sm font-medium text-slate-900">Recovery by winning basis</h3>
             <div className="h-12 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -397,165 +388,173 @@ export function OpportunityPanel({
           </div>
 
           <div className="overflow-x-auto rounded-md border border-slate-200">
-          <table className={dataTableClassName}>
-            <thead>
-              <tr>
-                <TableHeaderCell widthClass="w-8" sticky stickyLeft="left-0" />
-                <TableHeaderCell widthClass="w-[8.5rem]" sticky stickyLeft="left-8">
-                  Sizing basis
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[4.5rem]" onClick={() => setSortPreference('oem')}>
-                  OEM{sortIndicator('oem')}
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[5.5rem]" onClick={() => setSortPreference('program')}>
-                  Program{sortIndicator('program')}
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[6.5rem]" onClick={() => setSortPreference('part')}>
-                  Part{sortIndicator('part')}
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[4.5rem]">Status</TableHeaderCell>
-                <TableHeaderCell
-                  widthClass="w-[5rem]"
-                  align="right"
-                  onClick={() => setSortPreference('anchorPrice')}
-                >
-                  {anchorLabel} price{sortIndicator('anchorPrice')}
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[4.5rem]" align="right">
-                  {anchorLabel} EBIT %
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[4.5rem]" align="right">
-                  {anchorLabel} volume
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[5.5rem]">Winning basis</TableHeaderCell>
-                <TableHeaderCell widthClass="w-[5rem]" align="right">
-                  Target price
-                </TableHeaderCell>
-                <TableHeaderCell widthClass="w-[5rem]" align="right">
-                  Target price increase
-                </TableHeaderCell>
-                <TableHeaderCell
-                  widthClass="w-[5rem]"
-                  align="right"
-                  onClick={() => setSortPreference('fullPotential')}
-                >
-                  Full potential{sortIndicator('fullPotential')}
-                </TableHeaderCell>
-                <TableHeaderCell
-                  widthClass="w-[5rem]"
-                  align="right"
-                  onClick={() => setSortPreference('commercialRecovery')}
-                >
-                  Recovery target{sortIndicator('commercialRecovery')}
-                </TableHeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {displayRows.map((row) => {
-                const isExpanded = expandedId === row.recordId;
-                const isHighlighted = highlightedRecordIds?.has(row.recordId);
-                const override = rowOverrides[row.recordId];
-                const selectedBasis = getBasisSelectValue(override, row);
-                const excluded = selectedBasis === 'exclude';
-                const record = recordsById.get(row.recordId);
-                const recordAggregation = record
-                  ? aggregateRecords([record], periods, costComponents, portfolio.anchorYear)
-                  : null;
+            <table className={dataTableClassName}>
+              <thead>
+                <tr>
+                  <TableHeaderCell widthClass="w-8" sticky stickyLeft="left-0" />
+                  <TableHeaderCell widthClass="w-[8.5rem]" sticky stickyLeft="left-8">
+                    Sizing basis
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[4.5rem]" onClick={() => setSortPreference('oem')}>
+                    OEM{sortIndicator('oem')}
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[5.5rem]" onClick={() => setSortPreference('program')}>
+                    Program{sortIndicator('program')}
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[6.5rem]" onClick={() => setSortPreference('part')}>
+                    Part{sortIndicator('part')}
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[4.5rem]">Status</TableHeaderCell>
+                  <TableHeaderCell
+                    widthClass="w-[5rem]"
+                    align="right"
+                    onClick={() => setSortPreference('anchorPrice')}
+                  >
+                    {anchorLabel} price{sortIndicator('anchorPrice')}
+                  </TableHeaderCell>
+                  <TableHeaderCell
+                    widthClass="w-[5rem]"
+                    align="right"
+                    onClick={() => setSortPreference('anchorMargin')}
+                  >
+                    {anchorLabel} {optimizeLabel} %{sortIndicator('anchorMargin')}
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[4.5rem]" align="right">
+                    Best ref. margin %
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[4.5rem]">Best frame</TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[4.5rem]" align="right">
+                    {anchorLabel} EBIT %
+                  </TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[5.5rem]">Winning basis</TableHeaderCell>
+                  <TableHeaderCell widthClass="w-[5rem]" align="right">
+                    Target price increase
+                  </TableHeaderCell>
+                  <TableHeaderCell
+                    widthClass="w-[5rem]"
+                    align="right"
+                    onClick={() => setSortPreference('fullPotential')}
+                  >
+                    Full potential{sortIndicator('fullPotential')}
+                  </TableHeaderCell>
+                  <TableHeaderCell
+                    widthClass="w-[5rem]"
+                    align="right"
+                    onClick={() => setSortPreference('commercialRecovery')}
+                  >
+                    Recovery target{sortIndicator('commercialRecovery')}
+                  </TableHeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {displayRows.map((row) => {
+                  const isExpanded = expandedId === row.recordId;
+                  const isHighlighted = highlightedRecordIds?.has(row.recordId);
+                  const override = rowOverrides[row.recordId];
+                  const selectedBasis = getBasisSelectValue(override, row);
+                  const excluded = selectedBasis === 'exclude';
+                  const gap = row.marginPercentGap;
 
-                return (
-                  <Fragment key={row.recordId}>
-                    <tr
-                      className={cn(
-                        'border-t border-slate-100 hover:bg-slate-50/80',
-                        isHighlighted && 'bg-sky-50/60',
-                        excluded && 'opacity-50',
-                      )}
-                      onDoubleClick={() => toggleExpand(row.recordId)}
-                    >
-                      <td className="sticky left-0 z-10 bg-white px-2 py-2">
-                        <button
-                          type="button"
-                          aria-expanded={isExpanded}
-                          onClick={() => toggleExpand(row.recordId)}
-                          className="text-slate-500 hover:text-slate-800"
-                          title="Expand detail (or double-click row)"
-                        >
-                          {isExpanded ? '−' : '+'}
-                        </button>
-                      </td>
-                      <td className="sticky left-8 z-10 bg-white px-2 py-2">
-                        <Select
-                          value={selectedBasis}
-                          onValueChange={(value: OpportunityBasisId) =>
-                            onRowOverrideChange(row.recordId, {
-                              ...override,
-                              basis: value,
-                              excluded: value === 'exclude',
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-full min-w-[150px] text-xs">
-                            <SelectValueLeft />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {basisOptions.map((option) => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="truncate px-2 py-2">{row.metadata.OEM ?? '—'}</td>
-                      <td className="truncate px-2 py-2">{row.metadata['Program Name'] ?? '—'}</td>
-                      <td className="truncate px-2 py-2">
-                        {row.metadata['Part description'] ?? row.metadata['Part number'] ?? '—'}
-                      </td>
-                      <td className="px-2 py-2">
-                        <Badge variant={statusBadgeVariant(row.status)}>
-                          {statusLabel(row.status)}
-                        </Badge>
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatRowUnit(row.anchorPrice, row, displaySettings)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatMarginPercent(row.anchorEbitMarginPercent)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {row.anchorVolume?.toLocaleString() ?? '—'}
-                      </td>
-                      <td className="truncate px-2 py-2">{getWinningBasisLabel(row)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatRowUnit(row.targetPrice, row, displaySettings)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatRowUnit(row.targetPriceIncrease, row, displaySettings)}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {formatRowMoney(row.fullPotential, row, displaySettings)}
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium tabular-nums">
-                        {formatRowMoney(row.commercialRecovery, row, displaySettings)}
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={14} className="p-0">
-                          <OpportunityDetailDrawer
-                            row={row}
-                            settings={settings}
-                            displaySettings={displaySettings}
-                            recordAggregation={recordAggregation}
-                          />
+                  return (
+                    <Fragment key={row.recordId}>
+                      <tr
+                        className={cn(
+                          'border-t border-slate-100 hover:bg-slate-50/80',
+                          isHighlighted && 'bg-sky-50/60',
+                          excluded && 'opacity-50',
+                        )}
+                        onDoubleClick={() => toggleExpand(row.recordId)}
+                      >
+                        <td className="sticky left-0 z-10 bg-white px-2 py-2">
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => toggleExpand(row.recordId)}
+                            className="text-slate-500 hover:text-slate-800"
+                            title="Expand detail (or double-click row)"
+                          >
+                            {isExpanded ? '−' : '+'}
+                          </button>
+                        </td>
+                        <td className="sticky left-8 z-10 bg-white px-2 py-2">
+                          <Select
+                            value={selectedBasis}
+                            onValueChange={(value: MarginPercentBasisId) =>
+                              onRowOverrideChange(row.recordId, {
+                                ...override,
+                                basis: value,
+                                excluded: value === 'exclude',
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-full min-w-[150px] text-xs">
+                              <SelectValueLeft />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {basisOptions.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="truncate px-2 py-2">{row.metadata.OEM ?? '—'}</td>
+                        <td className="truncate px-2 py-2">
+                          {row.metadata['Program Name'] ?? '—'}
+                        </td>
+                        <td className="truncate px-2 py-2">
+                          {row.metadata['Part description'] ?? row.metadata['Part number'] ?? '—'}
+                        </td>
+                        <td className="px-2 py-2">
+                          <Badge variant={statusBadgeVariant(row.status)}>
+                            {marginGapStatusLabel(row.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatRowUnit(row.anchorPrice, row, displaySettings)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatMarginPercent(gap.anchorMarginPercent)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatMarginPercent(gap.bestReferenceMarginPercent)}
+                        </td>
+                        <td className="truncate px-2 py-2">
+                          {gap.bestReferenceFrameLabel ?? '—'}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatMarginPercent(row.anchorEbitMarginPercent)}
+                        </td>
+                        <td className="truncate px-2 py-2">
+                          {getMarginPercentWinningBasisLabel(row)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatRowUnit(row.targetPriceIncrease, row, displaySettings)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatRowMoney(row.fullPotential, row, displaySettings)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-medium tabular-nums">
+                          {formatRowMoney(row.commercialRecovery, row, displaySettings)}
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={15} className="p-0">
+                            <MarginPercentDetailDrawer
+                              row={row}
+                              settings={settings}
+                              displaySettings={displaySettings}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       </CardContent>
