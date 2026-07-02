@@ -8,7 +8,7 @@ A client-side web tool for tier-one automotive supplier commercial teams. Upload
 
 Open the link, upload an Excel workbook (`.xlsx` or `.xls`), and explore. All parsing runs in your browser — nothing is uploaded to a server.
 
-> **Pages setup:** In **Settings → Pages**, set **Source** to **GitHub Actions** (not “Deploy from a branch”). The deploy workflow runs automatically on every push to `main`.
+> **Pages setup:** In **Settings → Pages**, set **Source** to **Deploy from a branch**, choose branch **`gh-pages`**, folder **`/ (root)`**, and click **Save**. If a deploy fails, re-save those settings or re-run the latest **pages build and deployment** workflow from the Actions tab.
 
 ## Quick start
 
