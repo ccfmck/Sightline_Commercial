@@ -55,7 +55,7 @@ Workbooks may include a `Currency` metadata column. The app supports display in 
 
 ## Application tabs
 
-The left sidebar switches between three views. Each tab has a horizontal **Jump to** bar for its sections.
+The left sidebar switches between four views. Each tab has a horizontal **Jump to** bar for its sections.
 
 ### Tab 1 — Data & assumptions
 
@@ -72,6 +72,47 @@ The left sidebar switches between three views. Each tab has a horizontal **Jump 
 
 1. **Margin configuration** — choose material, contribution, or EBIT margin to optimize; map cost components to margin levels (cumulative buckets)
 2. **Commercial opportunity sizing** — portfolio KPIs and per-part table sized to close the gap between anchor-year margin and the best reference-frame margin
+
+### Tab 4 — Bottom-up erosion sizing (multi-lever)
+
+Sequential wizard: **Data → Lever 1 → Lever 2 → Lever 3 → Lever 4 → Lever 5 → Summary**
+
+1. **Data upload** — drag-and-drop or browse a simplified bottom-up Excel template (per-unit **or** total-dollar values with volume) **or** map an existing workbook's Material / Labor / Burden cost components; beginning + anchor year selection
+2. **Lever 1** — material breakdown by group, inflation multipliers; inflation pass-through sizing
+3. **Lever 2** — grouping for linear performance pricing (group avg material margin)
+4. **Lever 3** — long-tail repricing (top 4/5 by volume set target CM%)
+5. **Lever 4** — direct buy % and markup increase per group
+6. **Lever 5** — target CM% (global or per group) leaker uplift
+7. **Summary** — stacked lever composition chart, per-part table with all lever columns, expandable waterfall drawer
+
+**Excel templates (bottom-up inputs workbook):**
+
+| Sheet | Contents |
+|-------|----------|
+| Material list | Material type names |
+| Breakdown matrix | Group × material → % (must sum to 100% per group) |
+| Inflation | Material / labor / burden cumulative multipliers (beginning → anchor) |
+| Lever 4 | Direct buy % and markup increase per group |
+| Lever 5 | Target CM% per group (or global row) |
+
+**Simplified data template columns:** metadata (OEM, Product Group, …), Beginning-year and Anchor-year metrics (price, material, labor, burden, volume, CM/unit), optional currency.
+
+Each priced metric may be supplied **either** as a per-unit value **or** as a total dollar amount alongside that year's volume — the parser detects which and derives per-unit automatically:
+
+| Metric | Per-unit headers | Total headers (÷ volume) |
+|--------|------------------|--------------------------|
+| Price | `Price/unit`, `Unit price` | `Total sales`, `Sales $`, `Revenue` |
+| Material | `Material/unit` | `Total material cost`, `Material cost $` |
+| Labor | `Labor/unit` | `Total labor` |
+| Burden | `Burden/unit` | `Total burden` |
+| Contribution margin | `CM/unit` | `Total contribution margin $` |
+| Volume | `Volume`, `Quantity`, `Units` | — |
+
+- Totals are divided by the **same year's** volume (beginning totals ÷ beginning volume, anchor totals ÷ anchor volume). Zero/blank volume yields a null per-unit value.
+- If both a per-unit and a total column are present for a metric, the per-unit value is used.
+- CM/unit is derived as `price − (material + labor + burden)` per unit when no CM column (per-unit or total) is provided.
+
+**Sizing:** Total opportunity = sum of all 5 lever dollar opportunities (additive). Commercial recovery = total × external factor × capture rate.
 
 ## Sizing logic (summary)
 
@@ -92,6 +133,16 @@ Per-part **sizing basis** can be overridden (auto, specific frame, bleeder, leak
 - **Recovery target** — same haircut formula as Tab 2
 
 Per-part **sizing basis** can be overridden (auto, bleeder, leaker, or exclude from totals).
+
+### Bottom-up multi-lever (Tab 4)
+
+- **Lever 1** — inflate beginning-year cost buckets; size when `should_price > anchor_price`
+- **Lever 2** — `should_price = material / (1 − group_avg_material_margin)` when above P₁
+- **Lever 3** — top 80% by volume set dollar-weighted target CM%; `P₃ = C / (1 − Target_CM%/100)` when below target
+- **Lever 4** — `uplift = markup × material_cost × direct_buy%`
+- **Lever 5** — same price solve as Lever 3 using user target CM%
+- **Full potential** — sum of all lever dollar opportunities
+- **Recovery target** — same haircut formula as Tabs 2–3
 
 ## Scripts
 
@@ -114,6 +165,10 @@ src/
     aggregate.ts         — single-row & volume-weighted multi-row aggregation
     opportunitySizing.ts     — margin erosion & bleeder/leaker sizing (cost level)
     marginPercentSizing.ts   — margin-% gap sizing & bleeder/leaker (margin % level)
+    bottomUpSizing.ts        — five-lever bottom-up erosion sizing
+    parseBottomUpExcel.ts    — simplified bottom-up template parser
+    adaptExistingToBottomUp.ts — map existing workbook to BottomUpRecord
+    parseBottomUpInputsExcel.ts — supplemental lever inputs (breakdown, inflation, L4/L5)
     marginComponentDefaults.ts — default cost-component → margin level mapping
     currency.ts          — FX conversion for display
     format.ts            — number/currency formatting
@@ -126,6 +181,11 @@ src/
     DataAssumptionsTab.tsx
     CostLevelSizingTab.tsx
     MarginPercentSizingTab.tsx
+    BottomUpSizingTab.tsx
+    BottomUpDataUploadPanel.tsx
+    BottomUpLever1Panel.tsx … BottomUpLever5Panel.tsx
+    BottomUpOpportunityPanel.tsx
+    BottomUpDetailDrawer.tsx
     MarginComponentMappingPanel.tsx
     MarginPercentOpportunityPanel.tsx
     MarginPercentDetailDrawer.tsx
@@ -152,7 +212,8 @@ data/
 3. Set anchor year, margin targets, haircuts, and currency/FX assumptions
 4. **Cost level tab** — review portfolio sizing totals and per-part table; override sizing basis as needed; filter parts for price/cost/margin charts
 5. **Margin % tab** — configure margin type and cost-component mapping; review margin-gap sizing and override basis as needed
-6. Double-click a row in either sizing table for part-level detail
+6. **Bottom-up tab** — load data, configure levers 1–5 in sequence, review portfolio summary and per-part waterfall
+7. Double-click a row in any sizing table for part-level detail
 
 ## Not yet implemented
 

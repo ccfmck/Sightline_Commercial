@@ -16,6 +16,16 @@ export const MARGIN_PERCENT_TAB_SECTIONS = [
   { id: 'margin-percent-opportunity-sizing', label: 'Commercial Opportunity Sizing' },
 ] as const;
 
+export const BOTTOM_UP_TAB_SECTIONS = [
+  { id: 'bottom-up-data', label: 'Data' },
+  { id: 'bottom-up-lever1', label: 'Lever 1 — Inflation pass-through' },
+  { id: 'bottom-up-lever2', label: 'Lever 2 — Linear performance pricing' },
+  { id: 'bottom-up-lever3', label: 'Lever 3 — Long tail repricing' },
+  { id: 'bottom-up-lever4', label: 'Lever 4 — Handling fee markup' },
+  { id: 'bottom-up-lever5', label: 'Lever 5 — Leaker uplift' },
+  { id: 'bottom-up-summary', label: 'Summary' },
+] as const;
+
 export function getTabSections(activeTab: AppTabId) {
   switch (activeTab) {
     case 'data':
@@ -24,6 +34,8 @@ export function getTabSections(activeTab: AppTabId) {
       return COST_LEVEL_TAB_SECTIONS;
     case 'margin-percent':
       return MARGIN_PERCENT_TAB_SECTIONS;
+    case 'bottom-up':
+      return BOTTOM_UP_TAB_SECTIONS;
   }
 }
 

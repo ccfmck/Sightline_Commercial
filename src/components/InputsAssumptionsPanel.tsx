@@ -21,6 +21,14 @@ interface InputsAssumptionsPanelProps {
   onAnchorYearChange: (year: number) => void;
   onOpportunitySettingsChange: (settings: OpportunitySettings) => void;
   onDisplaySettingsChange: (settings: AppDisplaySettings) => void;
+  showBeginningYear?: boolean;
+  beginningYear?: number;
+  availableBeginningYears?: number[];
+  onBeginningYearChange?: (year: number) => void;
+  hideAnchorYear?: boolean;
+  hideTargetEbit?: boolean;
+  hideCurrency?: boolean;
+  hideQuoteNote?: boolean;
 }
 
 function clampPercent(value: number): number {
@@ -38,6 +46,14 @@ export function InputsAssumptionsPanel({
   onAnchorYearChange,
   onOpportunitySettingsChange,
   onDisplaySettingsChange,
+  showBeginningYear = false,
+  beginningYear,
+  availableBeginningYears = [],
+  onBeginningYearChange,
+  hideAnchorYear = false,
+  hideTargetEbit = false,
+  hideCurrency = false,
+  hideQuoteNote = false,
 }: InputsAssumptionsPanelProps) {
   function updateSetting<K extends keyof OpportunitySettings>(key: K, raw: string) {
     onOpportunitySettingsChange({
@@ -62,44 +78,71 @@ export function InputsAssumptionsPanel({
       <CardHeader>
         <CardTitle className="text-base">Additional Input and Assumptions</CardTitle>
         <CardDescription>
-          Anchor year, margin targets, recovery haircuts, and currency conversion settings.
+          {hideCurrency
+            ? 'Anchor year, margin targets, and recovery haircuts.'
+            : 'Anchor year, margin targets, recovery haircuts, and currency conversion settings.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <div className="space-y-1.5">
-            <Label htmlFor="anchor-year">Anchor year</Label>
-            <Select
-              value={String(anchorYear)}
-              onValueChange={(value) => onAnchorYearChange(Number(value))}
-            >
-              <SelectTrigger id="anchor-year">
-                <SelectValueLeft placeholder="Select anchor year" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableAnchorYears.map((year) => (
-                  <SelectItem key={year} value={String(year)}>
-                    {year}
-                    {quoteYears.includes(year) ? ' (quote available)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {showBeginningYear && beginningYear !== undefined && onBeginningYearChange && (
+            <div className="space-y-1.5">
+              <Label htmlFor="beginning-year">Beginning year</Label>
+              <Select
+                value={String(beginningYear)}
+                onValueChange={(value) => onBeginningYearChange(Number(value))}
+              >
+                <SelectTrigger id="beginning-year">
+                  <SelectValueLeft placeholder="Select beginning year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableBeginningYears.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="target-margin">Target EBIT margin %</Label>
-            <input
-              id="target-margin"
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={opportunitySettings.targetEbitMarginPercent}
-              onChange={(e) => updateSetting('targetEbitMarginPercent', e.target.value)}
-              className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-            />
-          </div>
+          {!hideAnchorYear && (
+            <div className="space-y-1.5">
+              <Label htmlFor="anchor-year">Anchor year</Label>
+              <Select
+                value={String(anchorYear)}
+                onValueChange={(value) => onAnchorYearChange(Number(value))}
+              >
+                <SelectTrigger id="anchor-year">
+                  <SelectValueLeft placeholder="Select anchor year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableAnchorYears.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                      {quoteYears.includes(year) ? ' (quote available)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {!hideTargetEbit && (
+            <div className="space-y-1.5">
+              <Label htmlFor="target-margin">Target EBIT margin %</Label>
+              <input
+                id="target-margin"
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                value={opportunitySettings.targetEbitMarginPercent}
+                onChange={(e) => updateSetting('targetEbitMarginPercent', e.target.value)}
+                className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="external-factor">External factor %</Label>
@@ -113,6 +156,10 @@ export function InputsAssumptionsPanel({
               onChange={(e) => updateSetting('externalFactorPercent', e.target.value)}
               className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
             />
+            <p className="text-xs text-slate-500">
+              The share of identified margin-erosion recovery assumed addressable via commercial
+              actions.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -127,28 +174,34 @@ export function InputsAssumptionsPanel({
               onChange={(e) => updateSetting('captureRatePercent', e.target.value)}
               className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
             />
+            <p className="text-xs text-slate-500">
+              The share of commercially addressable opportunity assumed achieved for a typical
+              claim.
+            </p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="display-currency">Display currency</Label>
-            <Select
-              value={displaySettings.displayCurrency}
-              onValueChange={(value: 'USD' | 'source') =>
-                onDisplaySettingsChange({ ...displaySettings, displayCurrency: value })
-              }
-            >
-              <SelectTrigger id="display-currency">
-                <SelectValueLeft />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD">US Dollar (USD)</SelectItem>
-                <SelectItem value="source">Source currency (workbook)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!hideCurrency && (
+            <div className="space-y-1.5">
+              <Label htmlFor="display-currency">Display currency</Label>
+              <Select
+                value={displaySettings.displayCurrency}
+                onValueChange={(value: 'USD' | 'source') =>
+                  onDisplaySettingsChange({ ...displaySettings, displayCurrency: value })
+                }
+              >
+                <SelectTrigger id="display-currency">
+                  <SelectValueLeft />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">US Dollar (USD)</SelectItem>
+                  <SelectItem value="source">Source currency (workbook)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
-        {nonUsdCurrencies.length > 0 && displaySettings.displayCurrency === 'USD' && (
+        {!hideCurrency && nonUsdCurrencies.length > 0 && displaySettings.displayCurrency === 'USD' && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {nonUsdCurrencies.map((currency) => (
               <div key={currency} className="space-y-1.5">
@@ -169,10 +222,12 @@ export function InputsAssumptionsPanel({
           </div>
         )}
 
-        <p className="text-xs text-slate-500">
-          At Quote uses the {anchorYear} quote price, volume, and at-quote unit costs. Chart tooltips
-          compare each period to {anchorYearLabel(anchorYear)}.
-        </p>
+        {!hideQuoteNote && (
+          <p className="text-xs text-slate-500">
+            At Quote uses the {anchorYear} quote price, volume, and at-quote unit costs. Chart
+            tooltips compare each period to {anchorYearLabel(anchorYear)}.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

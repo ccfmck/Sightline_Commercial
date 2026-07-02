@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   AppDisplaySettings,
+  BottomUpLeverSettingsBundle,
+  BottomUpParseResult,
+  BottomUpWizardStep,
+  CostComponentMapping,
   MarginPercentSettings,
   OpportunitySettings,
   ParseResult,
+  PortfolioBottomUpOpportunityResult,
   RowMarginPercentOverride,
   RowMarginPercentOverrides,
   RowOpportunityOverride,
@@ -11,6 +16,12 @@ import type {
 } from '../types';
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_OPPORTUNITY_SETTINGS } from '../types';
 import { aggregateRecords } from '../lib/aggregate';
+import { buildDefaultCostMapping } from '../lib/adaptExistingToBottomUp';
+import {
+  buildDefaultLeverSettings,
+  completedThroughAfterLeverSettingsChange,
+  sizePortfolioBottomUpOpportunity,
+} from '../lib/bottomUpSizing';
 import { normalizeCurrencyCode } from '../lib/currency';
 import { buildDefaultMarginPercentSettings } from '../lib/marginComponentDefaults';
 import { sizePortfolioMarginPercentOpportunity } from '../lib/marginPercentSizing';
@@ -18,6 +29,7 @@ import { buildBasisOptions, buildOpportunityFrames, sizePortfolioOpportunity } f
 import { buildPeriods, getAvailableAnchorYears } from '../lib/periods';
 import { AppBanner } from './AppBanner';
 import { AppTabNav, type AppTabId } from './AppTabNav';
+import { BottomUpSizingTab } from './BottomUpSizingTab';
 import { CostLevelSizingTab } from './CostLevelSizingTab';
 import { DataAssumptionsTab } from './DataAssumptionsTab';
 import { ExcelUpload } from './ExcelUpload';
@@ -49,10 +61,33 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
     null,
   );
 
+  const [bottomUpData, setBottomUpData] = useState<BottomUpParseResult | null>(null);
+  const [beginningYear, setBeginningYear] = useState<number>(2020);
+  const [bottomUpWizardStep, setBottomUpWizardStep] = useState<BottomUpWizardStep>('data');
+  const [completedThrough, setCompletedThrough] = useState(0);
+  const [leverSettings, setLeverSettings] = useState<BottomUpLeverSettingsBundle | null>(null);
+  const [costMapping, setCostMapping] = useState<CostComponentMapping>({
+    material: [],
+    labor: [],
+    burden: [],
+  });
+  const [bottomUpPortfolio, setBottomUpPortfolio] =
+    useState<PortfolioBottomUpOpportunityResult | null>(null);
+
   const availableAnchorYears = useMemo(
     () => (parseResult ? getAvailableAnchorYears(parseResult) : []),
     [parseResult],
   );
+
+  const bottomUpAvailableYears = useMemo(() => {
+    if (!parseResult) return [];
+    return [
+      ...new Set([
+        ...parseResult.availableQuoteYears,
+        ...parseResult.availableHistoricalYears,
+      ]),
+    ].sort((a, b) => a - b);
+  }, [parseResult]);
 
   const nonUsdCurrencies = useMemo(
     () => (parseResult?.availableCurrencies ?? []).filter((c) => c !== 'USD'),
@@ -67,6 +102,20 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
       setRowOverrides({});
       setRowOverridesMarginPercent({});
       setMarginPercentSettings(buildDefaultMarginPercentSettings(parseResult.costComponents));
+      setCostMapping(buildDefaultCostMapping(parseResult));
+      setBottomUpData(null);
+      setBeginningYear(
+        parseResult.availableHistoricalYears.filter((y) => y < parseResult.defaultAnchorYear)[0] ??
+          parseResult.defaultAnchorYear - 1,
+      );
+      setBottomUpWizardStep('data');
+      setCompletedThrough(0);
+      setLeverSettings(
+        buildDefaultLeverSettings(
+          parseResult.metadataFields.length ? parseResult.metadataFields : ['Product Group'],
+        ),
+      );
+      setBottomUpPortfolio(null);
       setActiveTab('data');
       setDisplaySettings((prev) => {
         const fxRatesToUsd: Record<string, number> = { ...prev.fxRatesToUsd };
@@ -169,6 +218,50 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
     }));
   }
 
+  function handleBottomUpDataLoaded(result: BottomUpParseResult) {
+    setBottomUpData(result);
+    setBeginningYear(result.beginningYear);
+    setAnchorYear(result.anchorYear);
+    setCompletedThrough(0);
+    setBottomUpPortfolio(null);
+    setLeverSettings(
+      buildDefaultLeverSettings(
+        result.metadataFields.length ? result.metadataFields : ['Product Group'],
+      ),
+    );
+    setBottomUpWizardStep('lever1');
+  }
+
+  function handleCalculateLever(leverNum: 1 | 2 | 3 | 4 | 5) {
+    if (!leverSettings || !bottomUpData || anchorYear === null) return;
+    const portfolio = sizePortfolioBottomUpOpportunity(
+      bottomUpData.records,
+      beginningYear,
+      anchorYear,
+      leverSettings,
+      opportunitySettings,
+    );
+    setBottomUpPortfolio(portfolio);
+    setCompletedThrough(leverNum);
+  }
+
+  function handleLeverSettingsChange(
+    updater: (prev: BottomUpLeverSettingsBundle) => BottomUpLeverSettingsBundle,
+    changedLever: 1 | 2 | 3 | 4 | 5,
+  ) {
+    setLeverSettings((prev) => {
+      if (!prev) return prev;
+      return updater(prev);
+    });
+    setCompletedThrough((prev) => {
+      const nextCompleted = completedThroughAfterLeverSettingsChange(prev, changedLever);
+      if (nextCompleted === 0) {
+        setBottomUpPortfolio(null);
+      }
+      return nextCompleted;
+    });
+  }
+
   function handleRowMarginPercentOverrideChange(
     recordId: string,
     override: RowMarginPercentOverride,
@@ -269,6 +362,33 @@ export function Dashboard({ parseResult, isLoading, onFileSelected }: DashboardP
               onRowOverrideChange={handleRowMarginPercentOverrideChange}
             />
           )}
+
+        {activeTab === 'bottom-up' && anchorYear !== null && leverSettings && (
+          <BottomUpSizingTab
+            parseResult={parseResult}
+            bottomUpData={bottomUpData}
+            beginningYear={beginningYear}
+            anchorYear={anchorYear}
+            availableYears={bottomUpAvailableYears}
+            costMapping={costMapping}
+            leverSettings={leverSettings}
+            wizardStep={bottomUpWizardStep}
+            completedThrough={completedThrough}
+            portfolio={bottomUpPortfolio}
+            opportunitySettings={opportunitySettings}
+            displaySettings={displaySettings}
+            nonUsdCurrencies={nonUsdCurrencies}
+            onDataLoaded={handleBottomUpDataLoaded}
+            onBeginningYearChange={setBeginningYear}
+            onAnchorYearChange={setAnchorYear}
+            onCostMappingChange={setCostMapping}
+            onLeverSettingsChange={handleLeverSettingsChange}
+            onWizardStepChange={setBottomUpWizardStep}
+            onCalculateLever={handleCalculateLever}
+            onOpportunitySettingsChange={setOpportunitySettings}
+            onDisplaySettingsChange={setDisplaySettings}
+          />
+        )}
       </div>
     </>
   );

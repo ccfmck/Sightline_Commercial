@@ -1,11 +1,12 @@
 import { cn } from '../lib/utils';
 
-export type AppTabId = 'data' | 'cost-level' | 'margin-percent';
+export type AppTabId = 'data' | 'cost-level' | 'margin-percent' | 'bottom-up';
 
 const TABS: { id: AppTabId; label: string }[] = [
   { id: 'data', label: 'Data upload and overall input' },
   { id: 'cost-level', label: 'Margin erosion sizing - cost based' },
   { id: 'margin-percent', label: 'Margin erosion sizing - margin based' },
+  { id: 'bottom-up', label: 'Bottom-up erosion sizing' },
 ];
 
 interface AppTabNavProps {

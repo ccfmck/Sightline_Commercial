@@ -401,7 +401,7 @@ export function OpportunityPanel({
             <thead>
               <tr>
                 <TableHeaderCell widthClass="w-8" sticky stickyLeft="left-0" />
-                <TableHeaderCell widthClass="w-[8.5rem]" sticky stickyLeft="left-8">
+                <TableHeaderCell widthClass="w-40" sticky stickyLeft="left-8">
                   Sizing basis
                 </TableHeaderCell>
                 <TableHeaderCell widthClass="w-[4.5rem]" onClick={() => setSortPreference('oem')}>
@@ -494,7 +494,7 @@ export function OpportunityPanel({
                             })
                           }
                         >
-                          <SelectTrigger className="h-8 w-full min-w-[150px] text-xs">
+                          <SelectTrigger className="h-8 w-full text-xs">
                             <SelectValueLeft />
                           </SelectTrigger>
                           <SelectContent>

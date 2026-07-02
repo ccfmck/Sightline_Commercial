@@ -285,3 +285,192 @@ export interface PortfolioMarginPercentOpportunityResult {
   compositionByWinner: Record<string, number>;
 }
 
+// --- Bottom-up multi-lever sizing ---
+
+export interface BottomUpYearMetrics {
+  price: number | null;
+  materialCost: number | null;
+  laborCost: number | null;
+  burdenCost: number | null;
+  volume: number | null;
+  cmPerUnit: number | null;
+}
+
+export interface BottomUpRecord {
+  id: string;
+  metadata: Record<string, string>;
+  currency: string;
+  beginningYear: number;
+  anchorYear: number;
+  beginning: BottomUpYearMetrics;
+  anchor: BottomUpYearMetrics;
+}
+
+export interface BottomUpParseResult {
+  sheetName: string;
+  warnings: string[];
+  metadataFields: string[];
+  availableYears: number[];
+  beginningYear: number;
+  anchorYear: number;
+  records: BottomUpRecord[];
+  rowCount: number;
+  availableCurrencies: string[];
+}
+
+export interface InflationRates {
+  materialRates: Record<string, number>;
+  laborRate: number;
+  burdenRate: number;
+}
+
+/** Sentinel dropdown value: treat all records as one group. */
+export const BOTTOM_UP_ALL_GROUPING_FIELD = '__all__';
+
+/** Display label and group key when all-grouping is active. */
+export const BOTTOM_UP_ALL_GROUP_LABEL = 'All (single group)';
+
+export interface Lever1Settings {
+  /** When false, this lever is skipped: price/CM pass through unchanged and it contributes $0. */
+  included: boolean;
+  groupingField: string;
+  materials: string[];
+  breakdownByGroup: Record<string, Record<string, number>>;
+  inflation: InflationRates;
+}
+
+export interface Lever2Settings {
+  included: boolean;
+  groupingField: string;
+}
+
+export interface Lever3Settings {
+  included: boolean;
+  groupingField: string;
+}
+
+export interface Lever4Settings {
+  included: boolean;
+  directBuyGroupingField: string;
+  markupGroupingField: string;
+  directBuyByGroup: Record<string, number>;
+  markupIncreaseByGroup: Record<string, number>;
+}
+
+export interface Lever5Settings {
+  included: boolean;
+  useGlobalTarget: boolean;
+  groupingField: string;
+  globalTargetCmPercent: number;
+  targetCmPercentByGroup: Record<string, number>;
+}
+
+export type BottomUpLeverId = 1 | 2 | 3 | 4 | 5;
+
+export interface BottomUpLeverResult {
+  lever: BottomUpLeverId;
+  price: number;
+  cm: number;
+  cmPercent: number | null;
+  unitOpportunity: number;
+  dollarOpportunity: number;
+  targetCmPercent?: number | null;
+  skipped?: boolean;
+  skipReason?: string;
+  /** True when the lever was excluded from sizing (pass-through, $0 opportunity). */
+  excluded?: boolean;
+  /**
+   * Lever 1 should-cost intermediates (anchor-year should cost per unit),
+   * exposed for the cost build-up detail table. Populated only by
+   * `sizeLever1Row`; undefined for other levers and for the excluded pass-through.
+   */
+  /** Σ over materials of (beginning material × breakdown% × material inflation). */
+  shouldMaterial?: number;
+  /** Beginning labor × labor inflation. */
+  shouldLabor?: number;
+  /** Beginning burden × burden inflation. */
+  shouldBurden?: number;
+  /** shouldMaterial + shouldLabor + shouldBurden. */
+  shouldTotalCost?: number;
+  /**
+   * Lever 2/3/5 build-up intermediates, exposed so the per-part detail tables
+   * display calc-consistent numbers (never recomputed differently in the UI).
+   * Populated only by the corresponding `sizeLeverNRow`; undefined for other
+   * levers and for the excluded/skip pass-through results.
+   */
+  /** Price fed into this lever from the prior lever (Levers 2-5). */
+  incomingPrice?: number;
+  /** Lever 2 & 4: anchor-year material cost per unit used by the lever. */
+  anchorMaterialCost?: number;
+  /** Lever 2: this part's material margin % = (P₁ − material) / P₁ × 100. */
+  partMaterialMarginPercent?: number | null;
+  /** Lever 2: group-average material margin % the part is priced toward. */
+  groupAvgMaterialMarginPercent?: number | null;
+  /** Lever 2/3/5: should price implied by the lever's target/group average. */
+  shouldPrice?: number;
+  /** Lever 3/5: contribution cost C = incoming price − incoming CM. */
+  contributionCost?: number;
+  /** Lever 3: true when the part is in the bottom 1/5 by volume (long tail). */
+  isLongTail?: boolean;
+  /**
+   * Lever 3: volume quintile within the part's group by anchor-year volume.
+   * 1 = highest-volume 20% (top), … 5 = lowest-volume 20% (the long tail).
+   */
+  volumeQuintile?: 1 | 2 | 3 | 4 | 5;
+  /** Lever 4: direct-buy share (%) applied to the uplift. */
+  directBuyPercent?: number;
+  /** Lever 4: markup increase (percentage points) applied to the uplift. */
+  markupIncrease?: number;
+  /** Lever 4: per-unit uplift = markup% × material × directBuy%. */
+  perUnitUplift?: number;
+}
+
+export interface RowBottomUpOpportunityResult {
+  recordId: string;
+  metadata: Record<string, string>;
+  currency: string;
+  beginningYear: number;
+  anchorYear: number;
+  anchorPrice: number | null;
+  anchorVolume: number | null;
+  levers: Record<`lever${BottomUpLeverId}`, BottomUpLeverResult>;
+  finalPrice: number;
+  finalCm: number;
+  finalCmPercent: number | null;
+  fullPotential: number;
+  commercialRecovery: number;
+  excluded: boolean;
+}
+
+export interface BottomUpLeverSettingsBundle {
+  lever1: Lever1Settings;
+  lever2: Lever2Settings;
+  lever3: Lever3Settings;
+  lever4: Lever4Settings;
+  lever5: Lever5Settings;
+}
+
+export interface PortfolioBottomUpOpportunityResult {
+  settings: OpportunitySettings;
+  beginningYear: number;
+  anchorYear: number;
+  leverSettings: BottomUpLeverSettingsBundle;
+  rows: RowBottomUpOpportunityResult[];
+  totalFullPotential: number;
+  totalCommercialRecovery: number;
+  rowsWithOpportunity: number;
+  compositionByLever: Record<string, number>;
+  targetCmByGroupL3: Record<string, number | null>;
+}
+
+export type BottomUpWizardStep =
+  | 'data'
+  | 'lever1'
+  | 'lever2'
+  | 'lever3'
+  | 'lever4'
+  | 'lever5'
+  | 'summary';
+
+export type CostComponentMapping = Record<'material' | 'labor' | 'burden', string[]>;
+
